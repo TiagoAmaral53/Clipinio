@@ -12,18 +12,26 @@ import Carbon
 class HotKey {
     fileprivate var hotKey: EventHotKeyRef? = nil
     fileprivate var eventHandler: EventHandlerRef? = nil
+    fileprivate var box: HotKeyBox?
+
+    fileprivate final class HotKeyBox {
+        let block: () -> ()
+        init(_ block: @escaping () -> ()) {
+            self.block = block
+        }
+    }
 
     init(keyCode: Int, modifiers: Int, block: @escaping () -> ()) {
         let hotKeyID = EventHotKeyID(signature: 1, id: 1)
         var eventType = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
-        
-        let ptr = UnsafeMutablePointer<Any>.allocate(capacity: 1)
-        ptr.initialize(to: block)
+
+        let box = HotKeyBox(block)
+        self.box = box
+        let ptr = Unmanaged.passUnretained(box).toOpaque()
 
         let eventHandlerUPP: EventHandlerUPP = {(_: OpaquePointer?, _: OpaquePointer?, ptr: UnsafeMutableRawPointer?) -> OSStatus in
             guard let pointer = ptr else { fatalError() }
-            // EventHandlerProcPtr
-            UnsafeMutablePointer<() -> ()>(OpaquePointer(pointer)).pointee()
+            Unmanaged<HotKeyBox>.fromOpaque(pointer).takeUnretainedValue().block()
             return noErr
         }
 
